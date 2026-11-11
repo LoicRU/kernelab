@@ -2,14 +2,19 @@ CC      = gcc
 ASM     = nasm
 LD      = ld
 CFLAGS  = -m32 -ffreestanding -fno-pie -fno-stack-protector -nostdlib \
-          -Wall -Wextra -std=gnu11 -Idrivers -Ikernel
+          -Wall -Wextra -std=gnu11 -Idrivers -Icpu -Ikernel
 ASFLAGS = -f elf32
 LDFLAGS = -m elf_i386 -T linker.ld
 
-BUILD = build
+BUILD  = build
 ISODIR = iso
+VPATH  = boot kernel drivers cpu
 
-OBJS = $(BUILD)/boot.o $(BUILD)/kernel.o $(BUILD)/vga.o
+C_SRCS   = kernel.c vga.c gdt.c idt.c isr.c irq.c pic.c
+ASM_SRCS = boot.asm gdt_flush.asm idt_flush.asm isr_stubs.asm irq_stubs.asm
+HEADERS  = $(wildcard drivers/*.h cpu/*.h)
+
+OBJS   = $(addprefix $(BUILD)/,$(C_SRCS:.c=.o)) $(addprefix $(BUILD)/,$(ASM_SRCS:.asm=.o))
 KERNEL = $(BUILD)/kernelab.bin
 
 .PHONY: all run iso lint clean
@@ -19,14 +24,11 @@ all: $(KERNEL)
 $(BUILD):
 	mkdir -p $(BUILD)
 
-$(BUILD)/boot.o: boot/boot.asm | $(BUILD)
+$(BUILD)/%.o: %.c $(HEADERS) | $(BUILD)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(BUILD)/%.o: %.asm | $(BUILD)
 	$(ASM) $(ASFLAGS) $< -o $@
-
-$(BUILD)/kernel.o: kernel/kernel.c drivers/vga.h | $(BUILD)
-	$(CC) $(CFLAGS) -c $< -o $@
-
-$(BUILD)/vga.o: drivers/vga.c drivers/vga.h | $(BUILD)
-	$(CC) $(CFLAGS) -c $< -o $@
 
 $(KERNEL): $(OBJS) linker.ld
 	$(LD) $(LDFLAGS) -o $@ $(OBJS)
